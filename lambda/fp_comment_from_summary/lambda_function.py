@@ -1,17 +1,23 @@
 import os
 import json
 import boto3
-#import requests
 from openai import OpenAI
+from datetime import datetime
 
 client = OpenAI(api_key=os.environ['OPENAI_API_KEY'])
 
+# FPコメント生成
 def generate_fp_comment(summary_json):
     prompt = f"""
-以下の家計データ（収支の週次、月次、カテゴリ別の集計）をもとに、利用者に向けた簡潔なFPコメントを日本語で出力してください。
+利用者は3人家族です。成人2名に0歳児が1名います。共働きですが、奥さんが育児休業中です。目的は月単位での家計の把握です。
+あなたはベテランFP人呼んで「藤原のパー子」40歳。
+以下の家計データ（収支の週次、月次、カテゴリ別の集計の月次、週次）をもとに、利用者に向けたFPコメントを
+日本語で出力してください。
 ・収支バランス（黒字/赤字）
 ・支出傾向（カテゴリ別の比率など）
 ・改善ポイント（節約・見直しの提案など）
+・先月と比較し特に大きな動きのあるカテゴリ
+・カテゴリ毎の金額の前月比
 
 データ：
 {json.dumps(summary_json, ensure_ascii=False)}
@@ -19,42 +25,70 @@ def generate_fp_comment(summary_json):
 出力形式：
 FPコメント: <コメント本文>
 """
-
     try:
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[{"role": "user", "content": prompt}]
         )
-        content = response.choices[0].message.content.strip()
-        return content
+        return response.choices[0].message.content.strip()
     except Exception as e:
         return f"コメント生成エラー: {e}"
 
-#def notify_line(message):
-#    token = os.environ.get("LINE_TOKEN")
-#    if not token:
-#        print("LINE_TOKENが設定されていません")
-#        return
-#
-#    try:
-#        requests.post(
-#            url='https://notify-api.line.me/api/notify',
-#            headers={'Authorization': f'Bearer {token}'},
-#            data={'message': message}
-#        )
-#        print("LINE通知を送信しました")
-#    except Exception as e:
-#        print(f"LINE通知エラー: {e}")
+# LINE通知関数をInvoke
+def invoke_line_notifier(user_id, message):
+    lambda_client = boto3.client("lambda")
+    payload = {
+        "userId": user_id,
+        "message": message
+    }
+    lambda_client.invoke(
+        FunctionName="line_notifier",
+        InvocationType="Event",
+        Payload=json.dumps(payload).encode("utf-8")
+    )
 
 def lambda_handler(event, context):
-    summary_json = event.get("summary")  # 前段から渡された集計データ（JSON）
-    if not summary_json:
-        return {"statusCode": 400, "body": "summaryが含まれていません"}
+    try:
+        print("[DEBUG] event:", event)
+        user_id = event.get("user_id")
+        if not user_id:
+            raise ValueError("user_id が渡されていません。")
 
-    comment = generate_fp_comment(summary_json)
-    #notify_line(comment)
+        # DynamoDBからjson_pathを取得
+        dynamodb = boto3.resource("dynamodb")
+        table = dynamodb.Table(os.environ["DYNAMODB_TABLE_NAME"])
+        response = table.get_item(Key={"userId": user_id})
 
-    return {
-        "statusCode": 200,
-        "body": json.dumps({"fp_comment": comment}, ensure_ascii=False)
-    }
+        if "Item" not in response or "json_path" not in response["Item"]:
+            raise ValueError("対象の JSON パスが見つかりません。")
+
+        json_key = response["Item"]["json_path"]
+        bucket = os.environ["S3_BUCKET_NAME"]
+
+        print(f"[INFO] ユーザー: {user_id}, JSONキー: {json_key}")
+
+        # S3からJSONファイル取得
+        s3 = boto3.client("s3")
+        obj = s3.get_object(Bucket=bucket, Key=json_key)
+        content = obj["Body"].read().decode("utf-8")
+        summary_json = json.loads(content)
+
+        # FPコメント生成
+        comment = generate_fp_comment(summary_json)
+
+        # LINE通知
+        invoke_line_notifier(user_id, comment)
+
+        print("📝 FPコメント生成:", comment)
+
+        return {
+            "statusCode": 200,
+            "body": json.dumps({"fp_comment": comment}, ensure_ascii=False)
+        }
+
+    except Exception as e:
+        print("[ERROR]", str(e))
+        return {
+            "statusCode": 500,
+            "body": json.dumps({"error": str(e)})
+        }

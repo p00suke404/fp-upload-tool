@@ -2,14 +2,12 @@ import csv
 import boto3
 import os
 import json
-#import openai
 import csv
 import io
 from datetime import datetime
 from collections import defaultdict
 from openai import OpenAI
 
-#openai.api_key = os.environ['OPENAI_API_KEY']
 client = OpenAI(api_key=os.environ['OPENAI_API_KEY'])
 
 # マネーフォワードMEのデフォルトカテゴリ
@@ -39,7 +37,6 @@ def classify_with_gpt(text):
                 {"role": "user", "content": prompt}
             ]
         )
-        #content = response['choices'][0]['message']['content']
         content = response.choices[0].message.content.strip()
 
         main = sub = "未分類"
@@ -149,6 +146,10 @@ def summarize_category_monthly(rows):
             })
     return result
 
+def summarize_unclassified_total(rows):
+    total = sum(float(row['金額（円）']) for row in rows if row['中項目'] == "未分類")
+    return {"category": "未分類", "total": total}
+
 def format_summary(summary_dict, period_key_name):
     result = []
     for key, data in sorted(summary_dict.items()):
@@ -160,6 +161,11 @@ def format_summary(summary_dict, period_key_name):
         })
     return result
 
+def write_json_to_s3(data, bucket, key):
+    s3 = boto3.client('s3')
+    s3.put_object(Bucket=bucket, Key=key, Body=json.dumps(data, ensure_ascii=False).encode('utf-8'))
+    print(f"[S3出力] JSONを保存しました → s3://{bucket}/{key}")
+
 # TEST-CODE
 def write_csv_to_s3(rows, bucket, key):
     output = io.StringIO()
@@ -170,24 +176,77 @@ def write_csv_to_s3(rows, bucket, key):
     s3.put_object(Bucket=bucket, Key=key, Body=output.getvalue().encode('utf-8'))
     print(f"[S3出力] 補完済CSVを保存しました → s3://{bucket}/{key}")
 
+def update_dynamodb_with_json_path(user_id, csv_path, json_path):
+    dynamodb = boto3.resource('dynamodb')
+    table = dynamodb.Table(os.environ['DYNAMODB_TABLE_NAME'])
+
+    now = datetime.utcnow().isoformat() + 'Z'
+
+    try:
+        response = table.update_item(
+            Key={'userId': user_id},
+            ConditionExpression="csv_path = :csv_path_val",
+            UpdateExpression="SET json_path = :json_path_val, created_at = :created_at_val",
+            ExpressionAttributeValues={
+                ":csv_path_val": csv_path,
+                ":json_path_val": json_path,
+                ":created_at_val": now
+            },
+            ReturnValues="UPDATED_NEW"
+        )
+        print(f"[DynamoDB] JSONパスを更新: {response}")
+    except Exception as e:
+        print(f"[DynamoDBエラー] 更新失敗: {str(e)}")
+
 def lambda_handler(event, context):
     bucket = event['Records'][0]['s3']['bucket']['name']
     key = event['Records'][0]['s3']['object']['key']
 
     rows = parse_csv_from_s3(bucket, key)
-    enriched_rows = enrich_rows(rows)
+#    enriched_rows = enrich_rows(rows)
 
     # S3に出力
 #    output_key = f"outputs/enriched_{os.path.basename(key)}"
 #    write_csv_to_s3(enriched_rows, bucket, output_key)
 
+#    result = {
+#        "weekly": summarize_weekly(enriched_rows),
+#        "monthly": summarize_monthly(enriched_rows),
+#        "category": summarize_by_category(enriched_rows),
+#        "category_weekly": summarize_category_weekly(enriched_rows),
+#        "category_monthly": summarize_category_monthly(enriched_rows)
+#    }
+
     result = {
-        "weekly": summarize_weekly(enriched_rows),
-        "monthly": summarize_monthly(enriched_rows),
-        "category": summarize_by_category(enriched_rows),
-        "category_weekly": summarize_category_weekly(enriched_rows),
-        "category_monthly": summarize_category_monthly(enriched_rows)
+        "weekly": summarize_weekly(rows),
+        "monthly": summarize_monthly(rows),
+        "category": summarize_by_category(rows),
+        "category_weekly": summarize_category_weekly(rows),
+        "category_monthly": summarize_category_monthly(rows),
+        "unclassified_total": summarize_unclassified_total(rows)
     }
+
+    # JSON出力パスを生成
+    json_output_key = f"outputs/summary_{os.path.basename(key).replace('.csv', '.json')}"
+
+    # JSONをS3に保存
+    write_json_to_s3(result, bucket, json_output_key)
+
+    # userId を取得（ファイル名から照合）
+    dynamodb = boto3.resource('dynamodb')
+    table = dynamodb.Table(os.environ['DYNAMODB_TABLE_NAME'])
+
+    response = table.scan()
+    user_id = None
+    for item in response.get('Items', []):
+        if item.get('csv_path') == key:
+            user_id = item['userId']
+            break
+
+    if user_id:
+        update_dynamodb_with_json_path(user_id, key, json_output_key)
+    else:
+        print("[WARN] 対応する userId が見つかりませんでした。")
 
     return {
         "statusCode": 200,
