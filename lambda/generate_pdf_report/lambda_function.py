@@ -16,7 +16,7 @@ def generate_pdf(summary_json, filepath="/tmp/report.pdf"):
 
     # タイトル
     pdf.set_text_color(0, 70, 140)
-    pdf.cell(0, 10, txt="📊 家計レポート", ln=True, align="C")
+    pdf.cell(0, 10, txt="家計レポート", ln=True, align="C")
     pdf.set_draw_color(0, 70, 140)
     pdf.set_line_width(0.8)
     pdf.line(10, 20, 200, 20)
@@ -40,19 +40,19 @@ def generate_pdf(summary_json, filepath="/tmp/report.pdf"):
         pdf.ln(5)
 
     if 'month_summary' in summary_json:
-        render_section("📅 月次収支", summary_json["month_summary"])
+        render_section("月次収支", summary_json["month_summary"])
 
     if 'week_summary' in summary_json:
-        render_section("🗓️ 週次収支", summary_json["week_summary"])
+        render_section("週次収支", summary_json["week_summary"])
 
     if 'monthly_by_category' in summary_json:
-        render_section("📂 月次カテゴリ別集計", summary_json["monthly_by_category"])
+        render_section("月次カテゴリ別集計", summary_json["monthly_by_category"])
 
     if 'weekly_by_category' in summary_json:
-        render_section("📂 週次カテゴリ別集計", summary_json["weekly_by_category"])
+        render_section("週次カテゴリ別集計", summary_json["weekly_by_category"])
 
     if 'unclassified_total' in summary_json:
-        render_section("❓ 未分類合計", {"未分類合計": summary_json["unclassified_total"]})
+        render_section("未分類合計", {"未分類合計": summary_json["unclassified_total"]})
 
     # PDF保存
     pdf.output(filepath)
@@ -71,7 +71,7 @@ def notify_line(user_id, presigned_url):
     lambda_client = boto3.client("lambda")
     payload = {
         "userId": user_id,
-        "message": f"📄 家計レポートのPDFができました！\nこちらからダウンロードできます👇\n{presigned_url}"
+        "message": f"家計レポートのPDFができました！\nこちらからダウンロードできます👇\n{presigned_url}"
     }
     lambda_client.invoke(
         FunctionName="line_notifier",
