@@ -86,6 +86,12 @@ def lambda_handler(event, context):
         if not user_id:
             raise ValueError("user_id が指定されていません")
 
+        filepath = "/tmp/report.pdf"
+        if os.path.exists(filepath):
+            os.remove(filepath)
+
+generate_pdf(summary_json, filepath)
+
         # JSONパスをDynamoDBから取得
         dynamodb = boto3.resource("dynamodb")
         table = dynamodb.Table(os.environ["DYNAMODB_TABLE_NAME"])
