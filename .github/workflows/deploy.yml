@@ -61,7 +61,7 @@ jobs:
         run: |
           cd lambda/fp_comment_from_summary
           mkdir -p package
-          cp -r * package/
+          cp lambda_function.py requirements.txt package/
           cd package
           python -m pip install -r requirements.txt -t .
           zip -r ../function.zip .
@@ -75,7 +75,7 @@ jobs:
         run: |
           cd lambda/line_notifier
           mkdir -p package
-          cp -r * package/
+          cp lambda_function.py requirements.txt package/
           cd package
           python -m pip install -r requirements.txt -t .
           zip -r ../function.zip .
