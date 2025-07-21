@@ -96,3 +96,17 @@ jobs:
           aws lambda update-function-code \
             --function-name line_userid_catcher \
             --zip-file fileb://function.zip
+          
+      # --- line_userid_catcher ---
+      - name: Deploy generate_pdf_report
+        run: |
+          cd lambda/generate_pdf_report
+          mkdir -p package
+          cp lambda_function.py package/
+          cd package
+          python -m pip install -r requirements.txt -t .
+          zip -r ../function.zip .
+          cd ..
+          aws lambda update-function-code \
+            --function-name generate_pdf_report \
+            --zip-file fileb://function.zip  
