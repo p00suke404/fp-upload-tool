@@ -6,57 +6,56 @@ import json
 
 # PDF生成関数
 def generate_pdf(summary_json, filepath="/tmp/report.pdf"):
+    from fpdf import FPDF
+    from datetime import datetime
+
     pdf = FPDF()
     pdf.add_page()
-
-    # フォント設定（日本語表示のため ipaexg.ttf 必須）
     font_path = os.path.join(os.path.dirname(__file__), "ipaexg.ttf")
     pdf.add_font("IPAexGothic", "", font_path, uni=True)
-    pdf.set_font("IPAexGothic", "", 14)
+    pdf.set_font("IPAexGothic", size=12)
 
     # タイトル
-    pdf.set_text_color(0, 70, 140)
-    pdf.cell(0, 10, txt="家計レポート", ln=True, align="C")
-    pdf.set_draw_color(0, 70, 140)
-    pdf.set_line_width(0.8)
-    pdf.line(10, 20, 200, 20)
-    pdf.ln(10)
+    pdf.set_font("IPAexGothic", "B", 16)
+    pdf.cell(0, 10, "家計レポート", ln=True, align="C")
+    pdf.set_font("IPAexGothic", "", 12)
+    pdf.cell(0, 10, f"作成日: {datetime.utcnow().strftime('%Y年%m月%d日 %H:%M')}", ln=True)
 
-    # 日付
-    now = datetime.now().strftime("%Y年%m月%d日 %H:%M")
-    pdf.set_text_color(0)
-    pdf.set_font("IPAexGothic", "", 10)
-    pdf.cell(0, 10, txt=f"作成日: {now}", ln=True)
     pdf.ln(5)
 
-    # 各セクション出力
-    def render_section(title, data):
+    # 未分類合計
+    if "unclassified_total" in summary_json:
+        unclassified = summary_json["unclassified_total"]
+        pdf.set_font("IPAexGothic", "B", 14)
+        pdf.cell(0, 10, "未分類合計", ln=True)
         pdf.set_font("IPAexGothic", "", 12)
-        pdf.set_text_color(0, 0, 0)
-        pdf.set_fill_color(220, 220, 220)
-        pdf.cell(0, 10, title, ln=True, fill=True)
-        pdf.set_font("IPAexGothic", "", 10)
-        pdf.multi_cell(0, 8, txt=json.dumps(data, ensure_ascii=False, indent=2))
+        pdf.cell(0, 10, f"カテゴリ: {unclassified['category']} / 合計: {unclassified['total']}円", ln=True)
         pdf.ln(5)
 
-    if 'month_summary' in summary_json:
-        render_section("月次収支", summary_json["month_summary"])
+    # 月次収支
+    if "monthly" in summary_json:
+        pdf.set_font("IPAexGothic", "B", 14)
+        pdf.cell(0, 10, "月次収支", ln=True)
+        pdf.set_font("IPAexGothic", "", 12)
+        for item in summary_json["monthly"]:
+            pdf.cell(0, 10, f"{item['month']}: 収入 {item['income']}円 / 支出 {item['expense']}円 / 収支 {item['net']}円", ln=True)
+        pdf.ln(5)
 
-    if 'week_summary' in summary_json:
-        render_section("週次収支", summary_json["week_summary"])
+    # カテゴリ別月次
+    if "category_monthly" in summary_json:
+        pdf.set_font("IPAexGothic", "B", 14)
+        pdf.cell(0, 10, "月別カテゴリ集計", ln=True)
+        pdf.set_font("IPAexGothic", "", 12)
+        current_month = None
+        for item in summary_json["category_monthly"]:
+            if current_month != item["month"]:
+                pdf.ln(3)
+                pdf.cell(0, 10, f"■ {item['month']}", ln=True)
+                current_month = item["month"]
+            pdf.cell(0, 10, f"{item['category']}: {item['amount']}円", ln=True)
 
-    if 'monthly_by_category' in summary_json:
-        render_section("月次カテゴリ別集計", summary_json["monthly_by_category"])
-
-    if 'weekly_by_category' in summary_json:
-        render_section("週次カテゴリ別集計", summary_json["weekly_by_category"])
-
-    if 'unclassified_total' in summary_json:
-        render_section("未分類合計", {"未分類合計": summary_json["unclassified_total"]})
-
-    # PDF保存
     pdf.output(filepath)
-
+ 
 # 署名付きURL生成
 def generate_presigned_url(bucket, key, expiration=3600):
     s3 = boto3.client("s3")
