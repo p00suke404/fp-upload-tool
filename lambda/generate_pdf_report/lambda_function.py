@@ -4,6 +4,12 @@ from datetime import datetime
 from fpdf import FPDF
 import json
 
+class JapanesePDF(FPDF):
+    def __init__(self):
+        super().__init__()
+        self.add_font('IPAexGothic', '', 'ipaexg.ttf', uni=True)
+        self.set_font('IPAexGothic', size=12)
+
 def generate_pdf(summary_json, filepath="/tmp/report.pdf"):
     pdf = FPDF()
     pdf.add_page()
