@@ -13,6 +13,7 @@ def generate_pdf(summary_json, filepath="/tmp/report.pdf"):
     pdf.add_page()
     font_path = os.path.join(os.path.dirname(__file__), "ipaexg.ttf")
     pdf.add_font("IPAexGothic", "", font_path, uni=True)
+    pdf.add_font("IPAexGothic", "B", font_path, uni=True)  # 太字用としても追加
     pdf.set_font("IPAexGothic", size=12)
 
     # タイトル
