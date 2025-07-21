@@ -71,7 +71,7 @@ def notify_line(user_id, presigned_url):
     lambda_client = boto3.client("lambda")
     payload = {
         "userId": user_id,
-        "message": f"家計レポートのPDFができました！\nこちらからダウンロードできます👇\n{presigned_url}"
+        "message": f"家計レポートのPDFができました！\nこちらからダウンロードできます\n{presigned_url}"
     }
     lambda_client.invoke(
         FunctionName="line_notifier",
@@ -89,8 +89,6 @@ def lambda_handler(event, context):
         filepath = "/tmp/report.pdf"
         if os.path.exists(filepath):
             os.remove(filepath)
-
-generate_pdf(summary_json, filepath)
 
         # JSONパスをDynamoDBから取得
         dynamodb = boto3.resource("dynamodb")
@@ -112,7 +110,7 @@ generate_pdf(summary_json, filepath)
         # ファイル名とローカル保存先
         timestamp = datetime.utcnow().strftime("%Y-%m-%d-%H%M")
         key = f"reports/{user_id}/{timestamp}.pdf"
-        local_path = "/tmp/report.pdf"
+        local_path = filepath
 
         # PDF生成とアップロード
         generate_pdf(summary_json, local_path)
