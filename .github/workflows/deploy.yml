@@ -73,7 +73,7 @@ jobs:
       # --- line_notifier ---
       - name: Deploy line_notifier
         run: |
-          cd lambda/line_notifier
+          cd lambda/line_nortifier
           mkdir -p package
           cp lambda_function.py requirements.txt package/
           cd package
