@@ -46,7 +46,7 @@ jobs:
         run: |
           cd lambda/mfme_csv_summary_generator
           mkdir -p package
-          cp -r * package/
+          cp lambda_function.py requirements.txt package/
           cd package
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt -t .
