@@ -1,0 +1,98 @@
+name: Deploy all Lambda functions
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    env:
+      AWS_REGION: ap-northeast-1
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Set up AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # --- generatePresignedUrl ---
+      - name: Deploy generatePresignedUrl
+        run: |
+          cd lambda/generate_presigned_url
+          mkdir -p package
+          cp lambda_function.py package/
+          cd package
+          zip -r ../function.zip .
+          cd ..
+          aws lambda update-function-code \
+            --function-name generatePresignedUrl \
+            --zip-file fileb://function.zip
+
+      # --- mfme_csv_summary_generator ---
+      - name: Deploy mfme_csv_summary_generator
+        run: |
+          cd lambda/mfme_csv_summary_generator
+          mkdir -p package
+          cp -r * package/
+          cd package
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt -t .
+          zip -r ../function.zip .
+          cd ..
+          aws lambda update-function-code \
+            --function-name mfme_csv_summary_generator \
+            --zip-file fileb://function.zip
+
+      # --- fp_comment_from_summary ---
+      - name: Deploy fp_comment_from_summary
+        run: |
+          cd lambda/fp_comment_from_summary
+          mkdir -p package
+          cp -r * package/
+          cd package
+          python -m pip install -r requirements.txt -t .
+          zip -r ../function.zip .
+          cd ..
+          aws lambda update-function-code \
+            --function-name fp_comment_from_summary \
+            --zip-file fileb://function.zip
+
+      # --- line_notifier ---
+      - name: Deploy line_notifier
+        run: |
+          cd lambda/line_notifier
+          mkdir -p package
+          cp -r * package/
+          cd package
+          python -m pip install -r requirements.txt -t .
+          zip -r ../function.zip .
+          cd ..
+          aws lambda update-function-code \
+            --function-name line_notifier \
+            --zip-file fileb://function.zip
+
+      # --- line_userid_catcher ---
+      - name: Deploy line_userid_catcher
+        run: |
+          cd lambda/line_userid_catcher
+          mkdir -p package
+          cp lambda_function.py package/
+          cd package
+          zip -r ../function.zip .
+          cd ..
+          aws lambda update-function-code \
+            --function-name line_userid_catcher \
+            --zip-file fileb://function.zip
