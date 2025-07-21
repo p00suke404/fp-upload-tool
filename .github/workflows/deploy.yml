@@ -3,7 +3,7 @@ name: Deploy all Lambda functions
 on:
   push:
     branches:
-      - main
+      - feature/fp-comment-fix
 
 jobs:
   deploy:
