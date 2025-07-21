@@ -4,16 +4,21 @@ from datetime import datetime
 from fpdf import FPDF
 import json
 
-class JapanesePDF(FPDF):
-    def __init__(self):
-        super().__init__()
-        self.add_font('IPAexGothic', '', 'ipaexg.ttf', uni=True)
-        self.set_font('IPAexGothic', size=12)
+#class JapanesePDF(FPDF):
+#    def __init__(self):
+#        super().__init__()
+#        self.add_font('IPAexGothic', '', 'ipaexg.ttf', uni=True)
+#        self.set_font('IPAexGothic', size=12)
 
 def generate_pdf(summary_json, filepath="/tmp/report.pdf"):
     pdf = FPDF()
     pdf.add_page()
-    pdf.set_font("Arial", size=12)
+
+    # --- フォントの追加（ipaexg.ttf を利用） ---
+    font_path = os.path.join(os.path.dirname(__file__), "ipaexg.ttf")
+    pdf.add_font("IPAexGothic", "", font_path, uni=True)
+    pdf.set_font("IPAexGothic", size=12)
+
     pdf.cell(200, 10, txt="家計レポート", ln=True, align="C")
     pdf.multi_cell(0, 10, txt=json.dumps(summary_json, ensure_ascii=False, indent=2))
     pdf.output(filepath)
