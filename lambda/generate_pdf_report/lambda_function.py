@@ -1,6 +1,6 @@
 import boto3
 import os
-from datetime import datetime, timedelta
+from datetime import datetime
 from fpdf import FPDF
 import json
 
@@ -33,26 +33,52 @@ def notify_line(user_id, presigned_url):
     )
 
 def lambda_handler(event, context):
-    user_id = event["user_id"]
-    summary_json = event["summary_json"]  # またはS3から読み取ってもOK
-    bucket = os.environ["S3_BUCKET_NAME"]
-    timestamp = datetime.utcnow().strftime("%Y-%m-%d-%H%M")
-    key = f"reports/{user_id}/{timestamp}.pdf"
+    try:
+        user_id = event.get("user_id")
+        if not user_id:
+            raise ValueError("user_id が指定されていません")
 
-    # 1. PDF作成
-    generate_pdf(summary_json, "/tmp/report.pdf")
+        dynamodb = boto3.resource("dynamodb")
+        table = dynamodb.Table(os.environ["DYNAMODB_TABLE_NAME"])
+        response = table.get_item(Key={"userId": user_id})
 
-    # 2. アップロード
-    s3 = boto3.client("s3")
-    s3.upload_file("/tmp/report.pdf", bucket, key)
+        if "Item" not in response or "json_path" not in response["Item"]:
+            raise ValueError("DynamoDB に json_path が存在しません")
 
-    # 3. Presigned URL生成
-    url = generate_presigned_url(bucket, key)
+        json_key = response["Item"]["json_path"]
+        bucket = os.environ["S3_BUCKET_NAME"]
 
-    # 4. LINE通知
-    notify_line(user_id, url)
+        # S3からsummary_jsonを取得
+        s3 = boto3.client("s3")
+        obj = s3.get_object(Bucket=bucket, Key=json_key)
+        content = obj["Body"].read().decode("utf-8")
+        summary_json = json.loads(content)
 
-    return {
-        "statusCode": 200,
-        "body": json.dumps({"url": url})
-    }
+        # ファイル名
+        timestamp = datetime.utcnow().strftime("%Y-%m-%d-%H%M")
+        key = f"reports/{user_id}/{timestamp}.pdf"
+        local_path = "/tmp/report.pdf"
+
+        # PDF生成・保存
+        generate_pdf(summary_json, local_path)
+
+        # S3にアップロード
+        s3.upload_file(local_path, bucket, key)
+
+        # Presigned URL生成
+        url = generate_presigned_url(bucket, key)
+
+        # LINE通知
+        notify_line(user_id, url)
+
+        return {
+            "statusCode": 200,
+            "body": json.dumps({"url": url})
+        }
+
+    except Exception as e:
+        print("[ERROR]", str(e))
+        return {
+            "statusCode": 500,
+            "body": json.dumps({"error": str(e)})
+        }
